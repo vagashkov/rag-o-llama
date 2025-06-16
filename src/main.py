@@ -1,16 +1,19 @@
-from ragger.ragger import Ragger
+from ragger import RAGWrapper
 
-doc_path = "/home/debian/llm/data/Test.pdf"
-embedding_model = "nomic-embed-text"
-generation_model = "llama3.2:1b"
+doc_path = ""
+embedding_model = ""
+generation_model = ""
 
 if __name__ == "__main__":
-    oracle = Ragger(
-        doc_path,
-        embedding_model,
-        generation_model
-    )
+    # Create new RAG session
+    oracle = RAGWrapper()
+    oracle()    
+    # oracle = Ragger(
+    #     doc_path,
+    #     embedding_model,
+    #     generation_model
+    # )
 
-    response = oracle.ask("What is this document about?")
+    # response = oracle.ask("What is this document about?")
 
-    print(response)
+    # print(response)
