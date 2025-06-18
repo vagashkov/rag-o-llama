@@ -1,20 +1,14 @@
-from logging import info
 from os.path import exists
-from typing import List, Dict, Any
+from typing import Dict, Any
 
 from environs import env
 from environs.exceptions import EnvError
 
-from ollama import list as list_models, pull, embeddings
-from langchain.chains.base import Chain
+from ollama import list as list_models, pull
 from langchain.prompts import ChatPromptTemplate, PromptTemplate
 from langchain.retrievers.multi_query import MultiQueryRetriever
-from langchain_community.document_loaders import (
-    UnstructuredPDFLoader, PDFPlumberLoader
-)
-from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
+from langchain_community.document_loaders import PDFPlumberLoader
 from langchain_community.vectorstores import Chroma
-from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_ollama import OllamaEmbeddings, ChatOllama
@@ -44,7 +38,7 @@ class Ragger:
         # Extract embedding model name from settings
         try:
             embedding_model = env.str("EMBEDDING_MODEL")
-        except EnvError:            
+        except EnvError:
             raise ValueError(
                 "Embedding model name not found"
             )
@@ -57,7 +51,7 @@ class Ragger:
         # Extract generating model name from settings
         try:
             generating_model = env.str("GENERATING_MODEL")
-        except EnvError:    
+        except EnvError:
             raise ValueError(
                 "Generating model name not found"
             )
@@ -81,7 +75,7 @@ class Ragger:
         )
 
         # Extract vector db storage
-        try: 
+        try:
             vector_db_storage = env.str("VECTOR_DB_STORAGE")
         except EnvError:
             raise ValueError(
@@ -97,7 +91,7 @@ class Ragger:
               - vector db storage: {self.vector_db_storage}
               - context: {self.context_template.template}
             """)
-    
+
     def ingest_pdf(self, doc_path: str) -> None:
         """
         Ingests PDF file content into vector database for farther using
@@ -108,11 +102,10 @@ class Ragger:
             raise FileNotFoundError(
                 "Source file not found: {}".format(doc_path)
             )
-        
+
         # Load doc and estimate it's size
         loader = PDFPlumberLoader(file_path=doc_path)
-        
-        
+
         # Split doc into chunks
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1200,
@@ -143,7 +136,7 @@ class Ragger:
         )
 
         # ...and finally build chain
-        template = """        
+        template = """
         Answer the question based ONLY on the following context: {context}
         Question: {question}
         """
