@@ -7,8 +7,8 @@ from environs.exceptions import EnvError
 from ollama import list as list_models, pull
 from langchain.prompts import ChatPromptTemplate, PromptTemplate
 from langchain.retrievers.multi_query import MultiQueryRetriever
+from langchain_chroma.vectorstores import Chroma
 from langchain_community.document_loaders import PDFPlumberLoader
-from langchain_community.vectorstores import Chroma
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_ollama import OllamaEmbeddings, ChatOllama
@@ -61,6 +61,25 @@ class Ragger:
             pull(generating_model)
         self.generating_model = ChatOllama(model=generating_model)
 
+        # Extract local vector db storage
+        try:
+            vector_db_storage = env.str("VECTOR_DB_STORAGE")
+        except EnvError:
+            raise ValueError(
+                "Vector DB storage not found"
+            )
+
+        if exists(vector_db_storage):
+            print("Loading vector db...")
+            vector_db = Chroma(
+                collection_name="local-rag-docs",
+                persist_directory=vector_db_storage,
+                embedding_function=OllamaEmbeddings(
+                model=self.embedding_model
+                ),
+            )            
+
+        # Finally, extract initialization prompt
         try:
             context_template = env.str("CONTEXT_TEMPLATE")
         except EnvError:
@@ -74,14 +93,32 @@ class Ragger:
             template=context_template
         )
 
-        # Extract vector db storage
-        try:
-            vector_db_storage = env.str("VECTOR_DB_STORAGE")
-        except EnvError:
-            raise ValueError(
-                "Vector DB storage not found"
+        self.prompt = ChatPromptTemplate.from_template(
+        """
+        Answer the question based ONLY on the following context: {context}
+        Question: {question}
+        """
+        )
+
+        # If vector database is not empty, we can create chain
+        if vector_db:
+            # Prepare retriever
+            retriever = MultiQueryRetriever.from_llm(
+                vector_db.as_retriever(),
+                self.generating_model,
+                prompt=self.context_template
             )
-        self.vector_db_storage = vector_db_storage
+
+            # ...and finally build chain
+            self.chain = (
+                {
+                    "context": retriever,
+                    "question": RunnablePassthrough()
+                }
+                | self.prompt
+                | self.generating_model
+                | StrOutputParser()
+            )
 
     def __str__(self) -> str:
         return (f"""
@@ -135,20 +172,13 @@ class Ragger:
             prompt=self.context_template
         )
 
-        # ...and finally build chain
-        template = """
-        Answer the question based ONLY on the following context: {context}
-        Question: {question}
-        """
-
-        prompt = ChatPromptTemplate.from_template(template)
-
+        # ...and finally build chain        
         self.chain = (
             {
                 "context": retriever,
                 "question": RunnablePassthrough()
             }
-            | prompt
+            | self.prompt
             | self.generating_model
             | StrOutputParser()
             )
